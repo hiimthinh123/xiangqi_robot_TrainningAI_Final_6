@@ -41,6 +41,7 @@ class CameraMonitor:
         self._stop_event = threading.Event()  # Thread-safe shutdown signal
         self._thread = None                 # Capture thread (30-60 FPS mượt mà)
         self._detect_thread = None          # YOLO detect thread (Async background)
+        self._lock = threading.Lock()       # Bảo vệ _last_frame/_last_detections
         self._cam_lock = threading.Lock()   # Bảo vệ truy cập camera (cap.read/grab)
 
         # Tự động chọn GPU nếu có CUDA, ngược lại CPU

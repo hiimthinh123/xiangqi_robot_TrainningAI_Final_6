@@ -79,7 +79,6 @@ def _cleanup_all():
     try: pygame.quit()
     except: pass
     print("[CLEANUP] ✅ Xong!")
-    sys.exit(0)
 
 atexit.register(_cleanup_all)
 
