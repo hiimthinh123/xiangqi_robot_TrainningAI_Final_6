@@ -85,8 +85,6 @@ print(f"[FEN] {state.current_fen}")
 
 hw.capture_baseline_if_needed(force_delay=1.0)
 
-hw.capture_baseline_if_needed(force_delay=1.0)
-
 # [API] Bắt đầu khởi tạo trận đấu truyền hình trực tiếp
 if not config.DRY_RUN:
     state.api_client.create_match(red_name="Người chơi Thật", black_name="Robot AI")

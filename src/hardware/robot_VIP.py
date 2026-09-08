@@ -43,6 +43,9 @@ class FR5Robot:
         self.teaching_points = {}  # {name: {"pose": [x,y,z,rx,ry,rz], "joints": [j1..j6]}}
         self.use_teaching_points = True  # Luôn dùng teaching points
 
+        # Kích thước ô cờ (mm), mặc định theo config, tự động cập nhật khi load teaching points
+        self.auto_cell_sizes = {"x": config.CELL_SIZE_X, "y": config.CELL_SIZE_Y}
+
     # -------------------------------------------------------------------------
     # SET MA TRẬN TỪ NGOÀI
     # -------------------------------------------------------------------------
@@ -175,8 +178,6 @@ class FR5Robot:
         # Sử dụng Bilinear Interpolation cho tất cả vị trí khác
         return self.board_to_pose_bilinear(col, row, z_height)
 
-        return [x_mm, y_mm, z_height] + list(config.ROTATION)
-
     def _calculate_cell_sizes_from_corners(self):
         """Tính CELL_SIZE tự động từ 4 góc teaching points."""
         r1 = self.teaching_points["R1"]["pose"]  # (0,0) - Đen Trái
@@ -194,6 +195,8 @@ class FR5Robot:
         distance_x_right = abs(r3[0] - r2[0])   # R2 → R3: 9 ô dọc
         cell_size_y = (distance_x_left + distance_x_right) / (2 * 9)
         
+        self.auto_cell_sizes = {"x": cell_size_x, "y": cell_size_y}
+
         print(f"[ROBOT] 📏 Tự động tính CELL_SIZE từ 4 góc:")
         print(f"[ROBOT]   CELL_SIZE_X = {cell_size_x:.2f}mm (ngang)")
         print(f"[ROBOT]   CELL_SIZE_Y = {cell_size_y:.2f}mm (dọc)")

@@ -17,7 +17,7 @@ from src.vision.calibrate_camera import calibrate_perspective_camera
 try:
     from ultralytics import YOLO
 except ImportError:
-    pass
+    YOLO = None
 
 class HardwareManager:
     """Manages Robot, Camera (Vision), and AI Engine connections."""
@@ -71,6 +71,10 @@ class HardwareManager:
 
     def _calibrate_robot(self):
         print("\n--- ROBOT CALIBRATION (R1 ORIGIN) ---")
+        if not self.robot.connected:
+            print("  ℹ️ Robot chưa kết nối — sử dụng tọa độ gốc mặc định từ config.")
+            return
+
         try:
             if self.dry_run:
                 self.config.BOARD_ORIGIN_X = 200.0
@@ -136,8 +140,11 @@ class HardwareManager:
 
         model_path = str(Path(self.project_dir) / "models" / "best.pt")
         try:
-            self.model = YOLO(model_path)
-            print(f"✅ Model loaded: {model_path}")
+            if YOLO is not None:
+                self.model = YOLO(model_path)
+                print(f"✅ Model loaded: {model_path}")
+            else:
+                print("⚠️ Warning: Module 'ultralytics' chưa được cài đặt, bỏ qua load YOLO model.")
         except Exception as e:
             print(f"⚠️ Warning: Could not load YOLO model: {e}")
             
