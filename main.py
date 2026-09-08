@@ -3,6 +3,15 @@
 # ===================================================================================
 import sys
 import os
+
+# Đảm bảo in tiếng Việt không bị lỗi font/crash UnicodeEncodeError trên Windows console
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import time
 import random
 import threading
