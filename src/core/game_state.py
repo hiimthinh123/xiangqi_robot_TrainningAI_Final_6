@@ -115,7 +115,7 @@ class GameState:
         self.winner = the_winner
         self.game_over = True
 
-    def save_rollback_state(self, baseline_occ=None, baseline_time=None):
+    def save_rollback_state(self, baseline_occ=None, baseline_time=None, baseline_snapshot=None):
         self._pre_space_state = {
             "board": [row[:] for row in self.board],
             "turn": self.turn,
@@ -127,6 +127,7 @@ class GameState:
             "move_history": list(self.move_history),
             "baseline_occ": baseline_occ,
             "baseline_time": baseline_time,
+            "baseline_snapshot": baseline_snapshot,
         }
         print("[SPACE] 💾 State saved for rollback (Z to undo).")
 
@@ -149,7 +150,10 @@ class GameState:
         self.move_history = list(s["move_history"])
 
         if hw_manager:
-            hw_manager.restore_yolo_baseline(s.get("baseline_occ"), s.get("baseline_time"))
+            if s.get("baseline_snapshot") is not None:
+                hw_manager.restore_yolo_baseline(s["baseline_snapshot"])
+            else:
+                hw_manager.restore_yolo_baseline(s.get("baseline_occ"), s.get("baseline_time"))
 
         print("[ROLLBACK] 📸 T1 baselines restored.")
 

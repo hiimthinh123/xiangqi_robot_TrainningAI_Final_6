@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import os
 import time
+from src.vision.types import BaselineSnapshot
 
 
 class SnapshotDetector:
@@ -28,10 +29,11 @@ class SnapshotDetector:
        Frame + detections được truyền vào từ CameraMonitor.
     """
 
-    def __init__(self, perspective_path, class_id_map, num_cols=9, num_rows=10):
+    def __init__(self, perspective_path="perspective.npy",
+                 class_id_map=None, num_cols=9, num_rows=10):
         """
         Args:
-            perspective_path: đường dẫn file perspective.npy
+            perspective_path: đường dẫn file ma trận perspective
             class_id_map:     dict {class_id: "r_P", "b_N", ...} (dùng để filter valid detections)
             num_cols:         số cột bàn cờ (9)
             num_rows:         số hàng bàn cờ (10)
@@ -41,21 +43,57 @@ class SnapshotDetector:
         self.num_cols = num_cols
         self.num_rows = num_rows
 
-        # T1 baseline
-        self._baseline_occ = None    # occupancy grid: True/False
-        self._baseline_frame = None  # actual camera frame tại T1 (cho absdiff)
-        self._baseline_time = None
+        # T1 baseline: Đóng gói nguyên khối trong BaselineSnapshot (V3/V4 architecture)
+        self._baseline = None
+
+    # -------------------------------------------------------------------------
+    # BACKWARD COMPATIBILITY PROPERTIES
+    # -------------------------------------------------------------------------
+
+    @property
+    def _baseline_occ(self):
+        return self._baseline.occupancy if self._baseline else None
+
+    @_baseline_occ.setter
+    def _baseline_occ(self, val):
+        if val is None:
+            self._baseline = None
+        elif self._baseline:
+            self._baseline.occupancy = val
+        else:
+            self._baseline = BaselineSnapshot(frame=None, detections=[], occupancy=val)
+
+    @property
+    def _baseline_frame(self):
+        return self._baseline.frame if self._baseline else None
+
+    @_baseline_frame.setter
+    def _baseline_frame(self, val):
+        if self._baseline:
+            self._baseline.frame = val
+
+    @property
+    def _baseline_time(self):
+        return self._baseline.timestamp if self._baseline else None
+
+    @_baseline_time.setter
+    def _baseline_time(self, val):
+        if self._baseline:
+            self._baseline.timestamp = val
 
     # -------------------------------------------------------------------------
     # PUBLIC API
     # -------------------------------------------------------------------------
 
-    def capture_baseline(self, frame, detections):
+    def capture_baseline(self, frame, detections, board_state=None, board_pose=None, pose_version=0):
         """Lưu T1 — snapshot baseline trước khi người chơi đi.
         
         Args:
-            frame:      OpenCV frame (BGR) từ CameraMonitor
-            detections: list of (cls_id, conf, (x1, y1, x2, y2)) từ CameraMonitor
+            frame:         OpenCV frame (BGR) từ CameraMonitor
+            detections:    list of (cls_id, conf, (x1, y1, x2, y2)) từ CameraMonitor
+            board_state:   bản sao board hiện tại (tùy chọn)
+            board_pose:    ma trận vị trí bàn cờ (tùy chọn)
+            pose_version:  phiên bản pose (tùy chọn)
         
         Returns:
             True nếu thành công, False nếu thất bại.
@@ -65,14 +103,33 @@ class SnapshotDetector:
             return False
 
         occ = self._build_occupancy(detections)
-        self._baseline_occ = occ
-        self._baseline_frame = frame.copy()  # Lưu frame thực để dùng absdiff
-        self._baseline_time = time.time()
+        self._baseline = BaselineSnapshot(
+            frame=frame.copy(),
+            detections=list(detections) if detections else [],
+            occupancy=occ,
+            timestamp=time.time(),
+            board_state=[row[:] for row in board_state] if board_state else None,
+            board_pose=board_pose,
+            pose_version=pose_version
+        )
 
         # Debug: đếm quân detect được
         n_occupied = sum(1 for r in occ for cell in r if cell)
-        print(f"[SNAPSHOT] 📸 T1 Baseline captured: {n_occupied} quân detected by camera")
+        print(f"[SNAPSHOT] 📸 T1 Baseline captured: {n_occupied} quân detected by camera (pose_v={pose_version})")
         return True
+
+    def get_baseline(self):
+        """Trả về BaselineSnapshot hiện tại."""
+        return self._baseline
+
+    def set_baseline(self, snapshot):
+        """Thiết lập BaselineSnapshot nguyên khối (cho rollback hoặc restore)."""
+        self._baseline = snapshot
+        if snapshot is not None:
+            n_occupied = sum(1 for r in snapshot.occupancy for cell in r if cell)
+            print(f"[SNAPSHOT] 🔄 Baseline restored/set: {n_occupied} quân (ts={snapshot.timestamp:.1f})")
+        else:
+            print("[SNAPSHOT] 🗑️ Baseline cleared via set_baseline(None).")
 
     def detect_move(self, frame, detections, board):
         """Chụp T2 và so sánh với T1 để phát hiện nước đi của quân ĐỎ.
@@ -86,7 +143,7 @@ class SnapshotDetector:
             (src, dst, piece_name) nếu phát hiện nước đi hợp lệ
             (None, None, None) nếu không phát hiện được
         """
-        if self._baseline_occ is None:
+        if self._baseline is None:
             print("[SNAPSHOT] ⚠️ Chưa có T1 baseline! Gọi capture_baseline() trước.")
             return None, None, None
 
@@ -102,17 +159,15 @@ class SnapshotDetector:
         print(f"[SNAPSHOT] 📸 T2 captured: {n_occupied} quân detected")
 
         # So sánh T1 vs T2 (dùng occupancy + memory board)
-        return self._compare_snapshots(self._baseline_occ, t2_occ, board, frame)
+        return self._compare_snapshots(self._baseline.occupancy, t2_occ, board, frame)
 
     def has_baseline(self):
         """Kiểm tra đã có T1 baseline chưa."""
-        return self._baseline_occ is not None
+        return self._baseline is not None
 
     def clear_baseline(self):
         """Xóa T1 baseline (dùng khi reset game)."""
-        self._baseline_occ = None
-        self._baseline_frame = None
-        self._baseline_time = None
+        self._baseline = None
         print("[SNAPSHOT] 🗑️ Baseline cleared.")
 
     def get_baseline_grid(self):
@@ -339,6 +394,12 @@ class SnapshotDetector:
             print("[SNAPSHOT] ❌ Không có quân đỏ nào biến mất.")
             return None, None, None
 
+        if len(red_disappeared) > 1:
+            # Phát hiện nhiều hơn 1 quân đỏ di chuyển trong cùng 1 lượt (chống gian lận/lỗi)
+            print(f"[SNAPSHOT] ⚠️ MULTI_PIECE_CHANGE: Phát hiện {len(red_disappeared)} quân đỏ rời vị trí ({[p for _,_,p in red_disappeared]})!")
+            print(f"[SNAPSHOT] ❌ Từ chối tự động đoán khi có >1 quân thay đổi để đảm bảo tính toàn vẹn trận đấu (Game Integrity).")
+            return None, None, None
+
         print(f"  Quân đỏ biến mất: {red_disappeared}")
 
         # === DST candidates: chỉ dựa vào thay đổi THỰC SỰ từ camera ===
@@ -402,11 +463,10 @@ class SnapshotDetector:
                     src, dst, piece, move_type = matched[0]
                     print(f"[SNAPSHOT] ✅ Detected ({move_type}, pixel absdiff of {len(valid_moves)}): {piece} {src}→{dst}")
                     return src, dst, piece
-            # Fallback về Manhattan nếu pixel absdiff thất bại
-            best = min(valid_moves, key=lambda m: abs(m[0][0]-m[1][0]) + abs(m[0][1]-m[1][1]))
-            src, dst, piece, move_type = best
-            print(f"[SNAPSHOT] ✅ Detected ({move_type}, Manhattan fallback of {len(valid_moves)}): {piece} {src}→{dst}")
-            return src, dst, piece
+
+            # Theo chuẩn V3/V4: Tuyệt đối không dùng Manhattan fallback để đoán mò khi không thể phân định
+            print(f"[SNAPSHOT] ❌ Ambiguity unresolved ({len(valid_moves)} valid candidates, pixel absdiff failed). Manhattan fallback DISABLED to protect game integrity.")
+            return None, None, None
 
         # === FALLBACK: Không có valid move qua occupancy grid ===
         # Dùng pixel absdiff để phát hiện capture (khi YOLO miss hoàn toàn dst)

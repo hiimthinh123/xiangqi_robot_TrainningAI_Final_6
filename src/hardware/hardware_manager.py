@@ -219,9 +219,26 @@ class HardwareManager:
 
     def clear_yolo_baseline(self):
         if self.yolo_detector:
-            self.yolo_detector._baseline_occ = None
+            if hasattr(self.yolo_detector, "clear_baseline"):
+                self.yolo_detector.clear_baseline()
+            else:
+                self.yolo_detector._baseline_occ = None
 
-    def restore_yolo_baseline(self, occ, baseline_time):
-        if self.yolo_detector and occ is not None:
-            self.yolo_detector._baseline_occ = [row[:] for row in occ]
+    def restore_yolo_baseline(self, snapshot_or_occ, baseline_time=None, frame=None):
+        if not self.yolo_detector or snapshot_or_occ is None:
+            return
+        from src.vision.types import BaselineSnapshot
+        if isinstance(snapshot_or_occ, BaselineSnapshot):
+            self.yolo_detector.set_baseline(snapshot_or_occ)
+        elif hasattr(self.yolo_detector, "set_baseline"):
+            occ = [row[:] for row in snapshot_or_occ]
+            snapshot = BaselineSnapshot(
+                frame=frame,
+                detections=[],
+                occupancy=occ,
+                timestamp=baseline_time if baseline_time is not None else time.time()
+            )
+            self.yolo_detector.set_baseline(snapshot)
+        else:
+            self.yolo_detector._baseline_occ = [row[:] for row in snapshot_or_occ]
             self.yolo_detector._baseline_time = baseline_time

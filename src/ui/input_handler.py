@@ -86,9 +86,10 @@ class InputHandler:
             return
 
         # SAVE ROLLBACK STATE TRƯỚC KHI DETECT (để có thể rollback khi lỗi)
-        occ = [row[:] for row in self.hw.yolo_detector._baseline_occ]
+        snapshot = self.hw.yolo_detector.get_baseline() if hasattr(self.hw.yolo_detector, "get_baseline") else None
+        occ = [row[:] for row in self.hw.yolo_detector._baseline_occ] if self.hw.yolo_detector._baseline_occ else None
         b_time = self.hw.yolo_detector._baseline_time
-        self.state.save_rollback_state(occ, b_time)
+        self.state.save_rollback_state(occ, b_time, baseline_snapshot=snapshot)
 
         # Perform Detection
         print("[SPACE] 🔍 Chạy YOLO Detector...")
