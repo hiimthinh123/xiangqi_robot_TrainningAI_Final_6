@@ -48,9 +48,9 @@ ROTATION = [89.658,-0.394, 174.148]
 ROBOT_IP = "192.168.58.2"
 DRY_RUN = False # Đổi thành True nếu muốn test code mà không cần bật Robot
 
-# Camera index (0 = built-in webcam, 1 = USB cam, etc.)
-# main.py will auto-try 0, 1, 2 if this index fails.
-VIDEO_SOURCE = 1
+# Camera index (0 = built-in webcam, 1 = USB cam, 2 = DroidCam, etc.)
+# main.py will auto-try configured index first, then others if it fails.
+VIDEO_SOURCE = 2
 
 # --- THÔNG SỐ AI ---
 AI_THINK_TIME = 10  # Time per move in seconds — AI gets 10s after subtracting TIME_BUFFER (0.5)
