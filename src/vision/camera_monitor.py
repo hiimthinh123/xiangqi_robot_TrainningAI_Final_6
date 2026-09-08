@@ -41,8 +41,15 @@ class CameraMonitor:
         self._stop_event = threading.Event()  # Thread-safe shutdown signal
         self._thread = None                 # Capture thread (30-60 FPS mượt mà)
         self._detect_thread = None          # YOLO detect thread (Async background)
-        self._lock = threading.Lock()       # Bảo vệ _last_frame/_last_detections
         self._cam_lock = threading.Lock()   # Bảo vệ truy cập camera (cap.read/grab)
+
+        # Tự động chọn GPU nếu có CUDA, ngược lại CPU
+        try:
+            import torch
+            self.device = 0 if torch.cuda.is_available() else 'cpu'
+        except Exception:
+            self.device = 'cpu'
+        print(f"[CAM MONITOR] 🚀 Using device: {self.device} for YOLO")
 
         self._load_perspective()
 
@@ -108,7 +115,7 @@ class CameraMonitor:
                 frame_rgb = cv2.cvtColor(frame_to_detect, cv2.COLOR_BGR2RGB)
                 results = self.model.predict(
                     frame_rgb, conf=0.35, iou=0.35,
-                    imgsz=640, verbose=False
+                    imgsz=640, device=self.device, verbose=False
                 )
                 for box in results[0].boxes:
                     cls_id = int(box.cls[0])
@@ -165,7 +172,8 @@ class CameraMonitor:
 
         # --- Info text ---
         n_pieces = len(detections)
-        info = f"Detected: {n_pieces} pieces | SPACE=confirm move"
+        dev_tag = "GPU" if self.device != "cpu" else "CPU"
+        info = f"[{dev_tag}] Detected: {n_pieces} pieces | SPACE=confirm move"
         cv2.putText(display, info, (10, 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
@@ -205,7 +213,7 @@ class CameraMonitor:
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = self.model.predict(
                     frame_rgb, conf=0.35, iou=0.35,
-                    imgsz=640, verbose=False
+                    imgsz=640, device=self.device, verbose=False
                 )
                 for box in results[0].boxes:
                     cls_id = int(box.cls[0])
