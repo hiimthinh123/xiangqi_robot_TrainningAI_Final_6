@@ -8,6 +8,14 @@ Chạy từ thư mục VIP/:
 """
 import sys
 import os
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import time
 import numpy as np
 import cv2

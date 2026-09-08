@@ -21,13 +21,21 @@
 
 import sys
 import os
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import time
 import argparse
 import numpy as np
 import cv2
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_DIR = os.path.dirname(_THIS_DIR)
+_PROJECT_DIR = os.path.dirname(os.path.dirname(_THIS_DIR))
 sys.path.insert(0, _PROJECT_DIR)
 
 import config
@@ -133,7 +141,7 @@ def main():
             pose = robot.board_to_pose(col, row, fly_z)
             print(f"\n  [{idx}/4] {label}")
             print(f"       → X={pose[0]:.2f}, Y={pose[1]:.2f}, Z={pose[2]:.2f}")
-            robot.movej_pose(pose, speed=args.speed)
+            robot.move_safe_pose(pose, speed=args.speed)
             time.sleep(0.3)
         robot.go_to_idle_home()
         print("\n✅ [DRY] Xong!")
@@ -192,7 +200,7 @@ def main():
         print(f"  Robot : X={pose[0]:.3f}, Y={pose[1]:.3f}, Z={pose[2]:.3f}")
         print(f"  Rot   : Rx={pose[3]:.3f}, Ry={pose[4]:.3f}, Rz={pose[5]:.3f}")
 
-        robot.movej_pose(pose, speed=args.speed)
+        robot.move_safe_pose(pose, speed=args.speed)
         print(f"  ✅ Đã đến góc {idx}. Đợi 2 giây...")
         time.sleep(2.0)
 

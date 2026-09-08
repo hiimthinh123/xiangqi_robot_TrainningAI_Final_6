@@ -3,10 +3,19 @@
 # === So sánh 2 snapshot camera (trước/sau khi đi) để phát hiện nước đi ===
 # === KHÔNG truy cập camera trực tiếp — nhận frame+detections từ ngoài ===
 # =============================================================================
-import cv2
-import numpy as np
+import sys
 import os
 import time
+import cv2
+import numpy as np
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 from src.vision.types import BaselineSnapshot
 
 

@@ -55,8 +55,8 @@ MOVE_SPEED = 50
 ROTATION = [89.658,-0.394, 174.148] 
 
 # Kết nối Robot
-ROBOT_IP = "192.168.58.2"
-DRY_RUN = False # Đổi thành True nếu muốn test code mà không cần bật Robot
+ROBOT_IP = os.getenv("ROBOT_IP", "192.168.58.2")
+DRY_RUN = os.getenv("DRY_RUN", "False").lower() in ("true", "1", "yes") # Đổi thành True nếu muốn test code mà không cần bật Robot
 
 # Camera index (0 = built-in webcam, 1 = USB cam, 2 = DroidCam, etc.)
 # main.py will auto-try configured index first, then others if it fails.

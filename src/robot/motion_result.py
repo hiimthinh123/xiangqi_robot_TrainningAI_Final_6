@@ -50,6 +50,16 @@ class MotionResult:
         """Cho phép dùng 'if result:' tương đương 'if result.is_success():'"""
         return self.is_success()
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Chuyển đổi kết quả thành dictionary serialization."""
+        return {
+            "status": self.status.value,
+            "error_code": self.error_code,
+            "message": self.message,
+            "details": self.details,
+            "data": self.details,
+        }
+
     def __repr__(self) -> str:
         return (
             f"MotionResult(status={self.status.value}, "
