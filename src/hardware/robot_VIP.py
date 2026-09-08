@@ -15,6 +15,7 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_DIR = os.path.dirname(os.path.dirname(_THIS_DIR))
 sys.path.insert(0, _PROJECT_DIR)
 import config
+from src.robot.motion_result import MotionStatus, MotionResult
 
 try:
     from src.hardware import robot_sdk_core
@@ -284,57 +285,69 @@ class FR5Robot:
     # DI CHUYỂN ROBOT
     # -------------------------------------------------------------------------
 
-    def move_safe_pose(self, pose, speed=None, col=None, row=None):
+    def move_safe_pose(self, pose, speed=None, col=None, row=None) -> MotionResult:
         """Di chuyển an toàn đến pose. Luôn dùng MoveCart để đảm bảo đường thẳng."""
         vel = speed or self.default_vel
         if self.dry:
             print(f"[ROBOT] DRY MoveCart → {[round(v,1) for v in pose]} vel={vel}")
             time.sleep(0.2)
-            return 0
+            return MotionResult(MotionStatus.SUCCESS, 0, "DRY MoveCart OK")
 
         # Luôn dùng MoveCart để đảm bảo di chuyển thẳng, tránh đá quân cờ
         err = self.robot.MoveCart(
             desc_pos=pose, tool=self.tool_num, user=self.user_num,
             vel=vel, acc=0.0, ovl=100.0, blendT=-1.0, config=-1
         )
-        if err not in (0, 112):
+        if err == 0:
+            return MotionResult(MotionStatus.SUCCESS, 0, "MoveCart completed")
+        elif err == 112:
+            print(f"[ROBOT] ⚠️ Cảnh báo controller 112: Quỹ đạo MoveCart chưa được xác nhận (UNCERTAIN)!")
+            return MotionResult(MotionStatus.UNCERTAIN, 112, "Controller warning 112: uncertain trajectory")
+        else:
             print(f"[ROBOT] ❌ Lỗi MoveCart: {err}")
-            raise Exception(f"Robot MoveCart error code: {err}")
-        return err
+            return MotionResult(MotionStatus.FAILED, err, f"Robot MoveCart error code: {err}")
 
-    def movej_joint(self, joint_pos, desc_pos, speed=None):
+    def movej_joint(self, joint_pos, desc_pos, speed=None) -> MotionResult:
         """Di chuyển trực tiếp bằng góc joint (MoveJ) nếu đã biết."""
         vel = speed or self.default_vel
         if self.dry:
             print(f"[ROBOT] DRY MoveJ_Joint → vel={vel}")
             time.sleep(0.2)
-            return 0
+            return MotionResult(MotionStatus.SUCCESS, 0, "DRY MoveJ OK")
             
         err = self.robot.MoveJ(
             joint_pos=joint_pos, desc_pos=desc_pos, tool=self.tool_num, user=self.user_num,
             vel=vel, acc=0.0, ovl=100.0, exaxis_pos=[0]*4, blendT=-1.0, offset_flag=0, offset_pos=[0]*6
         )
-        if err not in (0, 112):
+        if err == 0:
+            return MotionResult(MotionStatus.SUCCESS, 0, "MoveJ completed")
+        elif err == 112:
+            print(f"[ROBOT] ⚠️ Cảnh báo controller 112: Quỹ đạo MoveJ chưa được xác nhận (UNCERTAIN)!")
+            return MotionResult(MotionStatus.UNCERTAIN, 112, "Controller warning 112: uncertain trajectory")
+        else:
             print(f"[ROBOT] ❌ Lỗi movej_joint MoveJ: {err}")
-            raise Exception(f"Robot movej_joint error code: {err}")
-        return err
+            return MotionResult(MotionStatus.FAILED, err, f"Robot movej_joint error code: {err}")
 
-    def movel_pose(self, pose, speed=None):
+    def movel_pose(self, pose, speed=None) -> MotionResult:
         """Di chuyển thẳng đứng (MoveCart) đến pose."""
         vel = speed or self.default_vel
         if self.dry:
             print(f"[ROBOT] DRY MoveL → {[round(v,1) for v in pose]} vel={vel}")
             time.sleep(0.2)
-            return 0
+            return MotionResult(MotionStatus.SUCCESS, 0, "DRY MoveL OK")
 
         err = self.robot.MoveCart(
             desc_pos=pose, tool=self.tool_num, user=self.user_num,
             vel=vel, acc=0.0, ovl=100.0, blendT=-1.0, config=-1
         )
-        if err not in (0, 112):
+        if err == 0:
+            return MotionResult(MotionStatus.SUCCESS, 0, "MoveL completed")
+        elif err == 112:
+            print(f"[ROBOT] ⚠️ Cảnh báo controller 112: Quỹ đạo MoveL chưa được xác nhận (UNCERTAIN)!")
+            return MotionResult(MotionStatus.UNCERTAIN, 112, "Controller warning 112: uncertain trajectory")
+        else:
             print(f"[ROBOT] ❌ Lỗi MoveCart (movel): {err}")
-            raise Exception(f"Robot MoveCart error code: {err}")
-        return err
+            return MotionResult(MotionStatus.FAILED, err, f"Robot MoveCart error code: {err}")
 
     # -------------------------------------------------------------------------
     # VỀ NHÀ
@@ -397,7 +410,7 @@ class FR5Robot:
     # GRIPPER — Controller DO2
     # -------------------------------------------------------------------------
 
-    def gripper_ctrl(self, val):
+    def gripper_ctrl(self, val) -> MotionResult:
         """Điều khiển kẹp qua Controller DO2 (bộ điều khiển, không phải Tool DO).
         
         val = config.GRIPPER_CLOSE (1) → Đóng kẹp
@@ -407,12 +420,9 @@ class FR5Robot:
             action = "ĐÓNG" if val == config.GRIPPER_CLOSE else "MỞ"
             print(f"[ROBOT] DRY Gripper (SetDO ID={self.gripper_do_id}) → {action}")
             time.sleep(0.3)
-            return 0
+            return MotionResult(MotionStatus.SUCCESS, 0, f"DRY Gripper {action} OK")
 
         # NẾU CẮM CÁP M12 8-PIN VÀO ĐẦU CÁNH TAY (Tool DO):
-        # 1. Hãy dò tìm ID bằng file test_tool_do2.py trước (Thử ID=0, rồi ID=1)
-        # 2. Sau khi biết ID thực (VD: 1), sửa self.gripper_do_id = 1 ở đầu file.
-        # 3. Đổi hàm SetDO (dưới đây) thành SetToolDO:
         err = self.robot.SetToolDO(
             id=self.gripper_do_id,
             status=val,
@@ -420,56 +430,71 @@ class FR5Robot:
         )
         if err != 0:
             print(f"[ROBOT] ❌ Lỗi SetToolDO (gripper): {err}")
-        return err
+            return MotionResult(MotionStatus.FAILED, err, f"SetToolDO error: {err}")
+        return MotionResult(MotionStatus.SUCCESS, 0, "Gripper completed")
 
     # -------------------------------------------------------------------------
     # QUY TRÌNH GẮP / ĐẶT / ĂN QUÂN
     # -------------------------------------------------------------------------
 
-    def pick_at(self, col, row):
+    def pick_at(self, col, row) -> MotionResult:
         """Gắp 1 quân cờ tại (col, row)."""
         pose_safe = self.board_to_pose(col, row, config.SAFE_Z)
         pose_pick = self.board_to_pose(col, row, config.PICK_Z)
         print(f"[ROBOT] 🤏 Gắp tại grid=({col},{row}) → X={pose_safe[0]:.1f}, Y={pose_safe[1]:.1f}, Z={pose_safe[2]:.1f}")
 
-        self.gripper_ctrl(config.GRIPPER_OPEN)   # Mở kẹp
-        self.move_safe_pose(pose_safe, col=col, row=row)  # Đi đến vị trí an toàn trên ô
-        self.movel_pose(pose_pick)                # Hạ xuống
-        self.gripper_ctrl(config.GRIPPER_CLOSE)  # Đóng kẹp (gắp)
+        res = self.gripper_ctrl(config.GRIPPER_OPEN)   # Mở kẹp
+        if not res.is_success():
+            return res
+        res = self.move_safe_pose(pose_safe, col=col, row=row)  # Đi đến vị trí an toàn trên ô
+        if not res.is_success():
+            return res
+        res = self.movel_pose(pose_pick)                # Hạ xuống
+        if not res.is_success():
+            return res
+        res = self.gripper_ctrl(config.GRIPPER_CLOSE)  # Đóng kẹp (gắp)
+        if not res.is_success():
+            return res
         time.sleep(0.5)                           # Đợi kẹp đóng
-        self.movel_pose(pose_safe)                # Nhấc lên
+        res = self.movel_pose(pose_safe)                # Nhấc lên
+        if not res.is_success():
+            return res
         print(f"[ROBOT] ✅ Gắp xong ({col},{row})")
+        return MotionResult(MotionStatus.SUCCESS, 0, f"Pick ({col},{row}) completed")
 
-    def place_at(self, col, row):
+    def place_at(self, col, row) -> MotionResult:
         """Đặt 1 quân cờ tại (col, row)."""
         pose_safe  = self.board_to_pose(col, row, config.SAFE_Z)
         pose_place = self.board_to_pose(col, row, config.PLACE_Z)
         print(f"[ROBOT] 📍 Đặt tại grid=({col},{row}) → X={pose_safe[0]:.1f}, Y={pose_safe[1]:.1f}, Z={pose_safe[2]:.1f}")
 
-        self.move_safe_pose(pose_safe, col=col, row=row)  # Đến vị trí an toàn
-        self.movel_pose(pose_place)               # Hạ xuống
-        self.gripper_ctrl(config.GRIPPER_OPEN)   # Mở kẹp (thả)
+        res = self.move_safe_pose(pose_safe, col=col, row=row)  # Đến vị trí an toàn
+        if not res.is_success():
+            return res
+        res = self.movel_pose(pose_place)               # Hạ xuống
+        if not res.is_success():
+            return res
+        res = self.gripper_ctrl(config.GRIPPER_OPEN)   # Mở kẹp (thả)
+        if not res.is_success():
+            return res
         time.sleep(0.5)                           # Đợi thả
-        self.movel_pose(pose_safe)                # Nhấc lên
+        res = self.movel_pose(pose_safe)                # Nhấc lên
+        if not res.is_success():
+            return res
         print(f"[ROBOT] ✅ Đặt xong ({col},{row})")
+        return MotionResult(MotionStatus.SUCCESS, 0, f"Place ({col},{row}) completed")
     
-    def move_to_extra_safe(self, col, row):
+    def move_to_extra_safe(self, col, row) -> MotionResult:
         """Di chuyển đến độ cao an toàn trên ô (col, row)."""
         pose_safe = self.board_to_pose(col, row, config.SAFE_Z)
         print(f"[ROBOT] ⬆️ Nâng lên độ cao an toàn tại ({col},{row}) Z={config.SAFE_Z}")
-        self.move_safe_pose(pose_safe, col=col, row=row)
+        return self.move_safe_pose(pose_safe, col=col, row=row)
 
-    def place_in_capture_bin(self, current_z=None):
+    def place_in_capture_bin(self, current_z=None) -> MotionResult:
         """Thả quân bị ăn vào bãi thải sử dụng teaching point R_Trash.
         
         Args:
             current_z: Độ cao hiện tại của robot (nếu None, dùng SAFE_Z)
-        
-        Logic:
-            1. Về home trước (waypoint an toàn)
-            2. Từ home đi đến R_Trash bằng MoveJ (sử dụng teaching point)
-            3. Thả quân
-            4. Về home
         """
         print("[ROBOT] 🗑️ Thả quân bị ăn vào bãi...")
         
@@ -484,22 +509,26 @@ class FR5Robot:
             trash_pose = self.teaching_points["R_Trash"]["pose"]
             
             # Di chuyển đến R_Trash bằng MoveJ (an toàn hơn)
-            err = self.movej_joint(trash_joints, trash_pose)
-            if err not in (0, 112):
-                print(f"[ROBOT] ⚠️ Không thể đến R_Trash, dùng tọa độ config backup")
-                # Fallback: dùng tọa độ từ config
+            res = self.movej_joint(trash_joints, trash_pose)
+            if not res.is_success():
+                print(f"[ROBOT] ⚠️ Không thể đến R_Trash ({res.message}), dùng tọa độ config backup")
                 safe_z = current_z if current_z is not None else config.SAFE_Z
                 pose_safe = [config.CAPTURE_BIN_X, config.CAPTURE_BIN_Y, safe_z] + list(config.ROTATION)
-                self.move_safe_pose(pose_safe)
+                res = self.move_safe_pose(pose_safe)
+                if not res.is_success():
+                    return res
         else:
             print(f"[ROBOT] ⚠️ Không tìm thấy R_Trash, dùng tọa độ config")
-            # Fallback: dùng tọa độ từ config
             safe_z = current_z if current_z is not None else config.SAFE_Z
             pose_safe = [config.CAPTURE_BIN_X, config.CAPTURE_BIN_Y, safe_z] + list(config.ROTATION)
-            self.move_safe_pose(pose_safe)
+            res = self.move_safe_pose(pose_safe)
+            if not res.is_success():
+                return res
         
         # Bước 3: Thả quân
-        self.gripper_ctrl(config.GRIPPER_OPEN)
+        res = self.gripper_ctrl(config.GRIPPER_OPEN)
+        if not res.is_success():
+            return res
         time.sleep(0.5)
         
         # Bước 4: Về home sau khi thả xong (chuẩn bị cho bước tiếp theo)
@@ -507,12 +536,13 @@ class FR5Robot:
         self.go_to_home_chess()
         
         print("[ROBOT] ✅ Đã thả quân bị ăn.")
+        return MotionResult(MotionStatus.SUCCESS, 0, "Placed in capture bin")
 
     # -------------------------------------------------------------------------
     # HÀM CHÍNH — GỌI TỪ main_VIP.py
     # -------------------------------------------------------------------------
 
-    def move_piece(self, s_col, s_row, d_col, d_row, is_capture):
+    def move_piece(self, s_col, s_row, d_col, d_row, is_capture) -> MotionResult:
         """Quy trình di chuyển hoàn chỉnh, bao gồm xử lý ăn quân.
         
         Args:
@@ -529,7 +559,7 @@ class FR5Robot:
                 self.connect()
             except Exception as e:
                 print(f"[ROBOT] ❌ Không thể kết nối, hủy nước đi: {e}")
-                return
+                return MotionResult(MotionStatus.FAILED, -1, f"Connect error: {e}")
 
         # Tính khoảng cách di chuyển để quyết định có cần nâng cao hơn không
         distance = abs(d_col - s_col) + abs(d_row - s_row)
@@ -538,32 +568,45 @@ class FR5Robot:
         # 1. Nếu ăn quân: gắp quân địch → thả vào bãi thải
         if is_capture:
             print(f"[ROBOT] 🎯 Gắp quân địch tại đích ({d_col},{d_row})")
-            self.pick_at(d_col, d_row)
+            res = self.pick_at(d_col, d_row)
+            if not res.is_success():
+                return res
             
             # Nâng lên độ cao an toàn (SAFE_Z)
             print(f"[ROBOT] ⬆️ Nâng lên SAFE_Z={config.SAFE_Z}mm")
-            self.move_to_extra_safe(d_col, d_row)
+            res = self.move_to_extra_safe(d_col, d_row)
+            if not res.is_success():
+                return res
             
             # Bay thẳng đến bãi thải ở độ cao SAFE_Z (giữ nguyên Z)
-            self.place_in_capture_bin(current_z=config.SAFE_Z)
+            res = self.place_in_capture_bin(current_z=config.SAFE_Z)
+            if not res.is_success():
+                return res
 
         # 2. Gắp quân mình ở nguồn
         print(f"[ROBOT] 🤏 Gắp quân mình tại nguồn ({s_col},{s_row})")
-        self.pick_at(s_col, s_row)
+        res = self.pick_at(s_col, s_row)
+        if not res.is_success():
+            return res
         
         # Nâng lên độ cao an toàn nếu di chuyển xa
         if use_extra_safe:
             print(f"[ROBOT] 🛡️ Di chuyển xa ({distance} ô), sử dụng độ cao an toàn")
-            self.move_to_extra_safe(s_col, s_row)
+            res = self.move_to_extra_safe(s_col, s_row)
+            if not res.is_success():
+                return res
 
         # 3. Đặt quân mình vào đích
         print(f"[ROBOT] 📍 Đặt quân mình tại đích ({d_col},{d_row})")
-        self.place_at(d_col, d_row)
+        res = self.place_at(d_col, d_row)
+        if not res.is_success():
+            return res
 
         # 4. Về vị trí chờ
         self.go_to_home_chess()
 
         print("[ROBOT] ✅ Hoàn tất di chuyển.")
+        return MotionResult(MotionStatus.SUCCESS, 0, f"Move ({s_col},{s_row})->({d_col},{d_row}) completed")
 
     # -------------------------------------------------------------------------
     # TIỆN ÍCH

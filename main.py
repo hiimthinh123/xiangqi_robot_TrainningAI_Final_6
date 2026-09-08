@@ -162,27 +162,35 @@ try:
                     if best:
                         try: s, d = best
                         except: s, d = best[0], best[1]
-                        state.move_history.append({"turn": "b", "src": s, "dst": d})
                         
+                        # [RULE VALIDATION] Thẩm định nước cờ AI qua Rule Engine trước khi gửi robot
+                        if not xiangqi.is_valid_move(s, d, state.board, "b"):
+                            print(f"❌ [SAFETY] AI Engine trả về nước đi không hợp lệ ({s}->{d}) — Từ chối thực thi!")
+                            state.set_status("AI error: Invalid move rejected", color=(255, 0, 0), duration=5.0)
+                            best = None
+
+                    if best:
+                        try: s, d = best
+                        except: s, d = best[0], best[1]
                         cap_p = state.board[d[1]][d[0]]
                         is_cap = cap_p != "."
-                        if is_cap: state.r_captured.append(cap_p)
 
                         robot_success = True
                         if not config.DRY_RUN:
                             if hw.robot.connected:
                                 print(f"[AI] Robot executing move: {s}->{d}")
                                 try:
-                                    hw.robot.move_piece(s[0], s[1], d[0], d[1], is_cap)
-                                except Exception as e:
-                                    error_str = str(e)
-                                    print(f"⚠️ Robot error: {error_str}")
-                                    if "112" in error_str or "MoveCart" in error_str:
-                                        print("✅ Light error — counting as successful.")
-                                    else:
-                                        print("❌ [CRITICAL] Robot critical error, stopping game.")
+                                    motion_res = hw.robot.move_piece(s[0], s[1], d[0], d[1], is_cap)
+                                    if motion_res is not None and not motion_res.is_success():
+                                        print(f"❌ [SAFETY] Robot di chuyển thất bại [{motion_res.status.value}] (code {motion_res.error_code}): {motion_res.message}")
+                                        state.set_status(f"Robot error: {motion_res.message}", color=(255, 0, 0), duration=5.0)
                                         robot_success = False
                                         time.sleep(2)
+                                except Exception as e:
+                                    print(f"❌ [CRITICAL] Ngoại lệ khi robot di chuyển: {e}")
+                                    state.set_status("Robot critical error", color=(255, 0, 0), duration=5.0)
+                                    robot_success = False
+                                    time.sleep(2)
                             else:
                                 print(f"\n{'='*50}")
                                 print(f"🤖 AI đi: {state.board[s[1]][s[0]]} ({s[0]},{s[1]}) → ({d[0]},{d[1]}) {'ĂN' if is_cap else ''}")
@@ -190,6 +198,8 @@ try:
                                 print(f"{'='*50}\n")
 
                         if robot_success:
+                            state.move_history.append({"turn": "b", "src": s, "dst": d})
+                            if is_cap: state.r_captured.append(cap_p)
                             state.board, _ = xiangqi.make_temp_move(state.board, best)
                             state.last_move = best
                             state.turn = 'r'
