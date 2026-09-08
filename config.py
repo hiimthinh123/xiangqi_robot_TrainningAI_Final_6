@@ -2,7 +2,17 @@
 # === FILE: config.py (CẤU HÌNH TOÀN HỆ THỐNG) ===
 # =============================================================================
 
+import os
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # --- THÔNG SỐ ROBOT BÀN CỜ (HARDCODED TOẠ ĐỘ TOÁN HỌC) ---
+ROBOT_IP = os.getenv("ROBOT_IP", "192.168.58.2")
+
 # Tọa độ gốc (Điểm R1 - tương ứng Xe Đen Trái, ô col=0, row=0)
 # Tọa độ này sẽ được hệ thống Robot tự động ghi đè lúc khởi động bằng lệnh GetRobotTeachingPoint("R1")
 BOARD_ORIGIN_X = 200.0  
@@ -62,8 +72,8 @@ CLOUD_API_URL = "https://tuongkydaisu.com/api/engine/bestmove"
 CLOUD_TIMEOUT_SEC = 5
 
 # --- SIMULATION API CONFIGURATION ---
-SIMULATION_API_URL = "https://tuongkydaisu.com"
-SIMULATION_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzaW11bGF0aW9uMDAxIiwicm9sZSI6IlNJTVVMQVRJT04iLCJ0b2tlbklkIjoiMTlkYjRjMDEtNjk4My00MTU5LTllNzYtODk0NDU5YjJhMjM5IiwiaWF0IjoxNzczMTI3MTE5LCJleHAiOjE4MDQ2NjMxMTl9.cHQEzHS-SqrZqUZ9FRcJgUE_BzyxZ60iiy7xYzZPQOo" # Liên hệ admin để lấy Token cấp cho app. Điền vào đây.
+SIMULATION_API_URL = os.getenv("SIMULATION_API_URL", "https://tuongkydaisu.com")
+SIMULATION_TOKEN = os.getenv("SIMULATION_TOKEN", "")  # Cấu hình qua .env hoặc biến môi trường hệ thống
 
 # --- MOONFISH ENGINE ---
 # Hướng dẫn cho người mới clone repo:
