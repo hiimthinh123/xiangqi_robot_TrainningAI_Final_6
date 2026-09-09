@@ -126,7 +126,8 @@ def run_tests():
     # Clean up test .npy
     if os.path.exists(test_npy):
         try: os.remove(test_npy)
-        except: pass
+        except OSError:
+            pass
 
     print(f"\n🎉 HOÀN THÀNH: {passed_count}/{total_tests} bài test đều ĐẠT (PASSED)!\n")
 
