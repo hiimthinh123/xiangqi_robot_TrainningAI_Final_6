@@ -28,18 +28,20 @@ class SnapshotDetector:
        Frame + detections được truyền vào từ CameraMonitor.
     """
 
-    def __init__(self, perspective_path, class_id_map, num_cols=9, num_rows=10):
+    def __init__(self, perspective_path, class_id_map, num_cols=9, num_rows=10, max_dist_threshold=0.32):
         """
         Args:
             perspective_path: đường dẫn file perspective.npy
             class_id_map:     dict {class_id: "r_P", "b_N", ...} (dùng để filter valid detections)
             num_cols:         số cột bàn cờ (9)
             num_rows:         số hàng bàn cờ (10)
+            max_dist_threshold: dung sai khoảng cách tối đa tới giao điểm ô cờ (default: 0.32)
         """
         self.perspective_path = str(perspective_path)
         self.class_id_map = class_id_map
         self.num_cols = num_cols
         self.num_rows = num_rows
+        self.max_dist_threshold = max_dist_threshold
 
         # T1 baseline
         self._baseline_occ = None    # occupancy grid: True/False
@@ -143,9 +145,19 @@ class SnapshotDetector:
             return grid
 
         for cls_id, conf, (x1, y1, x2, y2) in detections:
-            # Chấp nhận tất cả detections (occupancy model chỉ có 1 class)
+            w = x2 - x1
+            h = y2 - y1
+            if w <= 0 or h <= 0:
+                continue
+
+            # Quân cờ nhìn từ camera có bounding box gần vuông.
+            aspect_ratio = float(w) / float(h)
+            if aspect_ratio < 0.55 or aspect_ratio > 1.80:
+                continue
+
+            # Điểm tiếp xúc của quân với mặt bàn.
             cx = (x1 + x2) / 2
-            cy = y1 + (y2 - y1) * 0.85  # Gần chân quân cờ
+            cy = y1 + h * 0.85
 
             try:
                 dst = cv2.perspectiveTransform(
@@ -154,17 +166,13 @@ class SnapshotDetector:
                 c_raw, r_raw = dst[0], dst[1]
                 c, r = int(round(c_raw)), int(round(r_raw))
 
-                # ⚠️ FIX: Clamp biên để tránh bỏ sót quân ở cột 8 / hàng 9.
-                # Perspective transform tại biên đôi khi cho c=8.6 → round=9 → bị bỏ sót.
-                # Chấp nhận nếu nằm trong ±1 ô ngoài biên → clamp về biên hợp lệ.
-                if -1 <= c <= self.num_cols and -1 <= r <= self.num_rows:
-                    c = max(0, min(c, self.num_cols - 1))
-                    r = max(0, min(r, self.num_rows - 1))
-                    grid[r][c] = True
-                # (nếu nằm ngoài ±1 → bỏ qua, đây là detection nhiễu thực sự)
-
-            except:
-                pass
+                # Do not clamp detections outside the board onto an edge cell.
+                if 0 <= c < self.num_cols and 0 <= r < self.num_rows:
+                    dist = ((c_raw - c) ** 2 + (r_raw - r) ** 2) ** 0.5
+                    if dist <= self.max_dist_threshold:
+                        grid[r][c] = True
+            except (cv2.error, TypeError, ValueError):
+                continue
 
         return grid
 

@@ -22,18 +22,20 @@ class CameraMonitor:
     Các module khác (SnapshotDetector) nhận frame + detections từ đây.
     """
 
-    def __init__(self, cap, model, perspective_path, window_name="Camera Monitor"):
+    def __init__(self, cap, model, perspective_path, window_name="Camera Monitor", conf=0.45):
         """
         Args:
             cap: cv2.VideoCapture đã mở
             model: YOLO model đã load
             perspective_path: đường dẫn file perspective.npy
             window_name: tên cửa sổ OpenCV
+            conf: ngưỡng confidence phát hiện quân cờ (default: 0.45)
         """
         self.cap = cap
         self.model = model
         self.perspective_path = str(perspective_path)
         self.window_name = window_name
+        self.conf = conf
         self._M = None  # perspective matrix (camera → grid)
         self._inv_M = None  # inverse (grid → camera pixel, để vẽ lưới)
         self._last_frame = None
@@ -115,7 +117,7 @@ class CameraMonitor:
             try:
                 frame_rgb = cv2.cvtColor(frame_to_detect, cv2.COLOR_BGR2RGB)
                 results = self.model.predict(
-                    frame_rgb, conf=0.35, iou=0.35,
+                    frame_rgb, conf=self.conf, iou=0.35,
                     imgsz=640, device=self.device, verbose=False
                 )
                 for box in results[0].boxes:
@@ -213,7 +215,7 @@ class CameraMonitor:
             try:
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = self.model.predict(
-                    frame_rgb, conf=0.35, iou=0.35,
+                    frame_rgb, conf=self.conf, iou=0.35,
                     imgsz=640, device=self.device, verbose=False
                 )
                 for box in results[0].boxes:
