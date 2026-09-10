@@ -42,7 +42,7 @@ GRIPPER_OPEN = 0
 MOVE_SPEED = 50
 
 # Góc xoay của đầu Robot (Rx, Ry, Rz)
-ROTATION = [89.658,-0.394, 174.148] 
+ROTATION = [-179.164, -3.047, -26.304] 
 
 # Kết nối Robot
 ROBOT_IP = "192.168.58.2"
